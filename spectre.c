@@ -87,7 +87,7 @@ volatile char* text_base = "this is the base of text -ish";
 /* victm can be placed anywhere below here */
 
 
-char asddffdfd[256];
+char a_in[256];
 
 uint8_t unused2[64];
 uint8_t array2[256 * 512];
@@ -351,13 +351,13 @@ int main(int argc,
   printf("data base is   : %p\n", data_base);
   printf("arr1 base is   : %p\n", array1);
   printf("bss base is    : %p\n", bss_base);
-  printf("ui base is     : %p\n", asddffdfd);
+  printf("ui base is     : %p\n", a_in);
   
   /* Default addresses to read is 40 (which is the length of the secret string) */
-  int len = 100;
+  int len = 233;
 
   printf ("Enter your password: ");
-  scanf ("%s", asddffdfd);
+  scanf ("%s", a_in);
 
   
   int score[2];
@@ -458,7 +458,7 @@ int main(int argc,
 }
 
 /*
-
+Shuai:
 Tested on Columbia ECE server
 No protection: hack succeed
 
